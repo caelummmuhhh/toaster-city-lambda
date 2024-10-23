@@ -1,45 +1,51 @@
 import json
 
-toasters = {
+toasters =
     [
         {
             "id": 1,
             "name": "Floral Toaster",
             "price": 12.99,
-            "img": "/images/Toaster1.jpeg"
+            "img": "/images/Toaster1.jpeg",
+            "quantity": 1000000
         },
         {
             "id": 2,
             "name": "Hamilton Toaster",
             "price": 199.49,
-            "img": "/images/Toaster2.jpeg"
+            "img": "/images/Toaster2.jpeg",
+            "quantity": 9
         },
         {
             "id": 3,
             "name": "Long Toaster",
             "price": 12.99,
-            "img": "/images/Toaster3.jpeg"
+            "img": "/images/Toaster3.jpeg",
+            "quantity": 80
+
         },
         {
             "id": 4,
             "name": "R2D2 Toaster",
             "price": 12.99,
-            "img": "/images/Toaster4.jpeg"
+            "img": "/images/Toaster4.jpeg",
+            "quantity": 100
         },
         {
             "id": 5,
             "name": "Goofy Button Toaster",
             "price": 12.99,
-            "img": "/images/Toaster5.jpeg"
+            "img": "/images/Toaster5.jpeg",
+            "quantity": 25
         },
         {
             "id": 6,
             "name": "Knob Toaster",
             "price": 12.99,
-            "img": "/images/Toaster6.jpeg"
+            "img": "/images/Toaster6.jpeg",
+            "quantity": 5
         }
     ]
-}
 
 def get_inventory(event):
     return {
@@ -105,7 +111,7 @@ def return_error_body():
 def get_handler_function(path):
     if path == '/inventory-management/inventory':
         return get_inventory
-    elif path == '/inventory-management/inventory/items/{Id}':
+    elif path == '/inventory-management/inventory/items/{id}':
         return get_item_by_id
     elif path == '/inventory-management/inventory/items':
         return get_item_by_name
