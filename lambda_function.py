@@ -64,11 +64,28 @@ def get_item_by_id(event):
         })
     }
 
+def get_item_by_name(event):
+    name = event['queryStringParameters']['Name']
+
+    for toaster in toasters:
+        if toaster['name'] == name:
+            return {
+                'statusCode': 200,
+                'body': json.dumps(toaster)
+            }
+    
+    return {
+        'statusCode': 404,
+        'body': json.dumps({
+            'message': 'Item not found'
+        })
+    }
+
 def post_order(event):
     bodyRaw = event['body']
     body = json.loads(bodyRaw)
 
-    # Further logic
+    # TODO: Further logic
 
     return {
         'statusCode': 200,
@@ -90,6 +107,8 @@ def get_handler_function(path):
         return get_inventory
     elif path == '/inventory-management/inventory/items/{Id}':
         return get_item_by_id
+    elif path == '/inventory-management/inventory/items':
+        return get_item_by_name
     elif path == '/order-processing/order':
         return post_order
     else:
@@ -99,7 +118,8 @@ def get_handler_function(path):
 def lambda_handler(event, context):
     # Handle URL paths of...
         # /inventory-management/inventory [GET]
-        # /inventory-management/inventory/{id} [GET]
+        # /inventory-management/inventory/items{id} [GET]
+        # /inventory-management/inventory/items?Name=&InStock=[GET]
         # /order-processing/order [POST]
 
     # Using resource as it contains the full path (i.e. includes '/{Id}')
