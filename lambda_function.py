@@ -110,6 +110,7 @@ def get_handler_function(path):
     if path == '/inventory-management/inventory':
         return get_inventory
     elif path == '/inventory-management/inventory/items/{id}':
+    elif path == '/inventory-management/inventory/items/{id}':
         return get_item_by_id
     elif path == '/inventory-management/inventory/items':
         return get_item_by_name
