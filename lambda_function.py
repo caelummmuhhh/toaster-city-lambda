@@ -86,23 +86,44 @@ def get_item_by_name(event):
     }
 
 def post_order(event):
-    bodyRaw = event['body']
-    body = json.loads(bodyRaw)
+    # Parse the incoming body from the event (API Gateway passes body as a string)
+    try:
+        body_raw = event['body']
+        body = json.loads(body_raw)
+    except Exception as e:
+        return {
+            'statusCode': 400,
+            'body': json.dumps({
+                'message': 'Invalid JSON format',
+                'error': str(e)
+            })
+        }
+
+    # Extract the items from the body
     items_ordered = body.get('items', [])
     unavailable_items = []
 
+    # Check each item against inventory
     for order_item in items_ordered:
         found = False
         for toaster in toasters:
-            if order_item['id'] == toaster['id']:
+            if order_item['item_id'] == toaster['name']:  # Match by name
                 if order_item['quantity'] > toaster['quantity']:
-                    unavailable_items.append(toaster['name'])
+                    unavailable_items.append({
+                        'item': toaster['name'],
+                        'requested_qty': order_item['quantity'],
+                        'available_qty': toaster['quantity']
+                    })
                 found = True
                 break
-        
-        if not found:
-            unavailable_items.append(f"Item with ID {order_item['id']} not found")
 
+        if not found:
+            unavailable_items.append({
+                'item': order_item['item_id'],
+                'message': 'Item not found in inventory'
+            })
+
+    # Return error if any item is unavailable
     if unavailable_items:
         return {
             'statusCode': 400,
@@ -112,8 +133,16 @@ def post_order(event):
             })
         }
 
+    # Decrement the quantity of items if the order is successful
+    for order_item in items_ordered:
+        for toaster in toasters:
+            if order_item['item_id'] == toaster['name']:
+                toaster['quantity'] -= order_item['quantity']
+
+    # Generate a unique confirmation number
     confirmation_number = f"CONF-{str(hash(json.dumps(body)))}"
 
+    # Return success response
     return {
         'statusCode': 200,
         'body': json.dumps({
