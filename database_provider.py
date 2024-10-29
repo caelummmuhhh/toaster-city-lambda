@@ -1,4 +1,5 @@
 import sqlalchemy as sa
+from sqlalchemy.exc import ResourceClosedError
 import pandas as pd
 
 class DatabaseProvider:
@@ -33,17 +34,19 @@ class DatabaseProvider:
         SQLAlchemy.engine.Engine
             The created engine.
         """
-        self._engine = sa.create_engine(self._conn_str, engine_args)
+        self._engine = sa.create_engine(self._conn_str, **engine_args)
         return self._engine
     
-
-    def query_db(self, sql: str) -> list:
+    @staticmethod
+    def query_db(engine: sa.engine.Engine, sql: str, params = None) -> list:
         """
-        Executes a SQL query against the specified database and returns the result set.
-        If no engine exists yet, creates engine.
+        Executes a SQL query against the specified database and commits.
+        Returns result set if query returns anything.
 
         Parameters
         ----------
+        engine : SQLAlchemy.engine.Engine
+            The SQLAlchemy engine to establish the database connection with
         sql : str
             The query to execute
         
@@ -52,21 +55,24 @@ class DatabaseProvider:
         list
             The result of the query
         """
-        if not self._engine:
-            self.get_engine()
-        
-        with self._engine.connect() as conn:
-            rs = conn.execute(sa.text(sql)).fetchall()
+        with engine.connect() as conn:
+            cur = conn.execute(sa.text(sql), parameters=params)
+            try:
+                rs = cur.fetchall()
+            except ResourceClosedError as err:
+                rs = None
+            conn.commit()
         return rs
     
-
-    def pandas_read_sql(self, sql: str, **read_sql_args) -> pd.DataFrame:
+    @staticmethod
+    def pandas_read_sql(engine: sa.engine.Engine, sql: str, **read_sql_args) -> pd.DataFrame:
         """
         Executes the SQL query and returns the result as a pandas DataFrame.
-        If no engine exists yet, creates engine.
 
         Parameters
         ----------
+        engine : SQLAlchemy.engine.Engine
+            The SQLAlchemy engine to establish the database connection with
         sql : str
             The SQL query to execute
         **read_sql_args : keyword arguments
@@ -76,10 +82,7 @@ class DatabaseProvider:
         -------
         pandas.DataFrame
             A DataFrame containing the result set of the executed query.
-        """
-        if not self._engine:
-            self.get_engine()
-        
-        with self._engine.connect() as conn:
-            df = pd.read_sql(sql, conn, read_sql_args)
+        """        
+        with engine.connect() as conn:
+            df = pd.read_sql(sql, conn, **read_sql_args)
         return df
