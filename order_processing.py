@@ -1,3 +1,5 @@
+import hashlib
+import time
 import pandas as pd
 import sqlalchemy as sa
 from inventory_management import InventoryManager
@@ -63,11 +65,42 @@ class OrderProcessor(object):
 
 
     def __process_shipping__(self, shipment) -> int:
+        sql = '''
+            SELECT ID
+            FROM SHIPPING_INFO
+            WHERE UPPER(NAME) = UPPER(:NAME)
+                AND UPPER(ADDRESS_1) = UPPER(:ADDRESS_1)
+                AND UPPER(ADDRESS_2) = UPPER(:ADDRESS_2)
+                AND UPPER(CITY) = UPPER(:CITY)
+                AND UPPER(STATE) = UPPER(:STATE)
+                AND UPPER(ZIP) = UPPER(:ZIP)
+            '''
+        
 
-        pass
+        shipping_info = {
+        'NAME': shipment['NAME'],
+        'ADDRESS_1': shipment['ADDRESS_1'],
+        'ADDRESS_2': shipment['ADDRESS_2'],
+        'CITY': shipment['CITY'],
+        'STATE': shipment['STATE'],
+        'ZIP': shipment['ZIP']
+        }
+
+        id = DatabaseProvider.query_db(self._engine, sql, shipping_info)
+        if id:
+            return id
+        
+        # Payment doesn't exist, insert new row
+        id = DatabaseProvider.query_db(self._engine, 'SELECT IFNULL(MAX(ID),0)+1 FROM SHIPPING_INFO')[0][0]
+        df = pd.DataFrame([], columns=['ID'] + list(shipping_info.keys()))
+        df.loc[0] = [id] + [str(c) for c in shipping_info.values()]
+        df.to_sql('SHIPPING_INFO', self._engine, index=False, if_exists='append')
+        return id
     
     def __generate_confirmation_number__(self, order):
-        pass
+        unique_string = f"{order['id']}_{order['user_id']}_{time.time()}"
+        confirmation_number = hashlib.sha256(unique_string.encode()).hexdigest()[:10]
+        return confirmation_number
 
     def __get_shipping_info_id__(self, shipping_info: dict) -> int | None:
         """

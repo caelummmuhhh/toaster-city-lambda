@@ -1,5 +1,12 @@
 import json
+from inventory_management import InventoryManager
+from database_provider import DatabaseProvider
 
+db = DatabaseProvider()
+inv = InventoryManager(db.get_engine())
+
+
+inv.get_inventory()
 toasters = [
     {
         'id': 1,
@@ -46,9 +53,10 @@ toasters = [
 ]
 
 def get_inventory(event):
+    df = inv.get_inventory('records')
     return {
         'statusCode': 200,
-        'body': json.dumps(toasters)
+        'body': json.dumps(df.to_dict("records"))
     }
 
 def get_item_by_id(event):
