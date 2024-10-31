@@ -1,3 +1,4 @@
+from typing import Any
 import sqlalchemy as sa
 from sqlalchemy.exc import ResourceClosedError
 import pandas as pd
@@ -38,7 +39,7 @@ class DatabaseProvider:
         return self._engine
     
     @staticmethod
-    def query_db(engine: sa.engine.Engine, sql: str, params = None) -> list:
+    def query_db(engine: sa.engine.Engine, sql: Any, params = None) -> list:
         """
         Executes a SQL query against the specified database and commits.
         Returns result set if query returns anything.
@@ -55,8 +56,11 @@ class DatabaseProvider:
         list
             The result of the query
         """
+        if type(sql) is str:
+            sql = sa.text(sql)
+
         with engine.connect() as conn:
-            cur = conn.execute(sa.text(sql), parameters=params)
+            cur = conn.execute(sql, parameters=params)
             try:
                 rs = cur.fetchall()
             except ResourceClosedError as err:
