@@ -61,12 +61,13 @@ def get_inventory(event):
 
 def get_item_by_id(event):
     id = event['pathParameters']['id']
+    df = inv.get_item_by_id(id)
 
     for toaster in toasters:
         if str(toaster['id']) == str(id):
             return {
                 'statusCode': 200,
-                'body': json.dumps(toaster)
+                'body': json.dumps(df.to_dict("records"))
             }
 
     return {
@@ -78,12 +79,12 @@ def get_item_by_id(event):
 
 def get_item_by_name(event):
     name = event['queryStringParameters']['Name']
-
+    df = inv.get_item_by_name(name)
     for toaster in toasters:
         if toaster['name'] == name:
             return {
                 'statusCode': 200,
-                'body': json.dumps(toaster)
+                'body': json.dumps(df.to_dict("records"))
             }
     
     return {
