@@ -51,7 +51,7 @@ class InventoryManagementHandler():
             If no error, the message is a dictionary of the inventory items.
         """
         only_items_in_stock = False
-        if isinstance(query_str_params, dict) and 'in_stock' in query_str_params and query_str_params['query_str_params'].lower() == 'true':
+        if isinstance(query_str_params, dict) and 'in_stock' in query_str_params and query_str_params['in_stock'].lower() == 'true':
             only_items_in_stock = True
         
         return 200, self._manager.get_inventory(only_items_in_stock).to_dict('records')
