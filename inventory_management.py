@@ -1,9 +1,10 @@
 import sqlalchemy as sa
 import pandas as pd
 from database_provider import DatabaseProvider
+from toasterdb_orms import *
 
 class InventoryManager(object):
-    """Handles Inventory."""
+    """Handles Inventory management related requests."""
     _db: sa.engine.Engine
 
     def __init__(self, db_engine: sa.engine.Engine):
@@ -30,9 +31,9 @@ class InventoryManager(object):
         pandas.Dataframe
             A DataFrame of the data retrieved.
         """
-        sql = 'SELECT * FROM INVENTORY'
+        sql = sa.select(Inventory)
         if only_in_stock:
-            sql = 'SELECT * FROM INVENTORY WHERE STOCK_QUANTITY > 0' 
+            sql = sa.select(Inventory).where(Inventory.stock_quantity > 0)
         return DatabaseProvider.pandas_read_sql(self._engine, sql)
 
 
@@ -50,9 +51,8 @@ class InventoryManager(object):
         pandas.DataFrame
             A DataFrame containing the item found based on ID, if any.
         """
-        sql = 'SELECT * FROM INVENTORY WHERE ITEM_ID = %s'
-        params = (id,)
-        return DatabaseProvider.pandas_read_sql(self._engine, sql, params=params)
+        sql = sa.select(Inventory).where(Inventory.item_id == id)
+        return DatabaseProvider.pandas_read_sql(self._engine, sql)
 
     def get_item_by_name(self, name: str) -> pd.DateOffset:
         """
@@ -68,9 +68,8 @@ class InventoryManager(object):
         pandas.DataFrame
             A DataFrame containing the item found based on the item name, if any.
         """
-        sql = 'SELECT * FROM INVENTORY WHERE UPPER(ITEM_NAME) = UPPER(%s)'
-        params = (name,)
-        return DatabaseProvider.pandas_read_sql(self._engine, sql, params=params)
+        sql = sa.select(Inventory).where(Inventory.item_name == name)
+        return DatabaseProvider.pandas_read_sql(self._engine, sql)
 
     def item_enough_stock(self, item_id: int | str, quantity: int | str) -> bool:
         """
@@ -89,44 +88,9 @@ class InventoryManager(object):
             Returns true if item stock >= quantity, false if not.
             Returns nothing if item not found.
         """
-        sql = 'SELECT * FROM INVENTORY WHERE ITEM_ID = %s AND STOCK_QUANTITY >= %s'
-        params = (item_id, quantity,)
-        df = DatabaseProvider.pandas_read_sql(self._engine, sql, params=params)
+        sql = sa.select(Inventory).where(
+            (Inventory.item_id == item_id) & (Inventory.stock_quantity >= quantity)
+        )
+        df = DatabaseProvider.pandas_read_sql(self._engine, sql)
         return not df.empty
     
-
-    def purchase_item(self, item_id: int, quantity: int):
-        """
-        Removes certain item quantity from stock. If not enough quantity, does nothing.
-
-        Parameters
-        ----------
-        item_id : int
-            The ID of the item to remove quantity of stock from
-        quantity : int
-            The quantity of stock to remove from specified item's stock quantity
-        """
-
-        sql = '''
-            UPDATE INVENTORY
-            SET STOCK_QUANTITY = STOCK_QUANTITY - :quantity
-            WHERE ITEM_ID = :id AND STOCK_QUANTITY >= :quantity
-            '''
-        params = {
-            'quantity': quantity,
-            'id': item_id
-        }
-        DatabaseProvider.query_db(self._engine, sql, params)
-
-    def purchase_items(self, items: list):
-        """
-        Remove specified quantities from each item, if enough stock, if not, does nothing for that item.
-        Expected items list format:
-        items = [
-            {
-            'id': int,
-            'quantity': int
-            }
-        ]
-        """
-        pass
