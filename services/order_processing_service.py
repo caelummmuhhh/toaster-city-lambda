@@ -39,6 +39,7 @@ class OrderProcessingService(object):
         """
         self._engine = engine
 
+
     def process_order(self, order: dict) -> tuple[int, str | int]:
         """
         Processes an order with the ordered items, payment info, and shipping info.
@@ -87,9 +88,6 @@ class OrderProcessingService(object):
         """
         self._raw_order = order
 
-        if not self.__validate_raw_order__():
-            return 400, 'Invalid order format.' # Bad Request
-
         if not self.__in_stock__():
             # Item not in stock, return -1 to indicate it
             return 409, 'Not enough items in stock.' # Conflict
@@ -112,57 +110,14 @@ class OrderProcessingService(object):
             })
 
             self.__process_order_items__()
-            self.__update_database_with_order__()
         except Exception as err:
             return 500, f'An error occurred when processing order. {type(err).__name__}'
+        
+        if not self.__update_database_with_order__():
+            return 500, f'An error occurred when making changes to database.'
+
         return 200, self._order_id
     
-    def __validate_raw_order__(self) -> bool:
-        """
-        Validates if the raw order has all the information required.
-
-        Returns
-        -------
-        bool
-            True if the order has all required information, False otherwise.
-        """
-        # Check for top level keys
-        required_top_level_keys = {'items', 'payment_info', 'shipping_info'}
-        if not required_top_level_keys.issubset(self._raw_order.keys()):
-            return False
-
-        # Check items
-        if not isinstance(self._raw_order['items'], list) or not self._raw_order['items']:
-            return False
-        
-        for item in self._raw_order['items']:
-            if not isinstance(item, dict):
-                return False
-            if not {'item_id', 'quantity'}.issubset(item.keys()):
-                return False
-            if not isinstance(item['item_id'], int) or not isinstance(item['quantity'], int):
-                return False
-
-        # Check payment_info
-        payment_info = self._raw_order['payment_info']
-        required_payment_keys = {'name', 'card_number', 'expiration_date', 'cvv', 'billing_address'}
-        if not required_payment_keys.issubset(payment_info.keys()):
-            return False
-        
-        # Check billing_address within payment_info
-        billing_address = payment_info['billing_address']
-        required_billing_keys = {'address_1', 'address_2', 'city', 'state', 'zip'}
-        if not required_billing_keys.issubset(billing_address.keys()):
-            return False
-
-        # Check shipping_info
-        shipping_info = self._raw_order['shipping_info']
-        required_shipping_keys = {'name', 'address_1', 'address_2', 'city', 'state', 'zip'}
-        if not required_shipping_keys.issubset(shipping_info.keys()):
-            return False
-
-        return True
-
 
     def __process_order_items__(self):
         """
@@ -287,6 +242,7 @@ class OrderProcessingService(object):
                 return False
         return True
     
+    
     def __update_database_with_order__(self) -> bool:
         """
         Makes necessary changes to the database based on the order.
@@ -322,7 +278,6 @@ class OrderProcessingService(object):
             except Exception as err:
                 session.rollback()
                 success = False
-                # TODO: Return a message indicating an error occurred making changes to database
             else:
                 session.commit()
         return success

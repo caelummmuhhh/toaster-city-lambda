@@ -55,7 +55,8 @@ class InventoryManagingService(object):
         sql = sa.select(Inventory).where(Inventory.item_id == id)
         return DatabaseProvider.pandas_read_sql(self._engine, sql)
 
-    def get_item_by_name(self, name: str) -> pd.DateOffset:
+
+    def get_item_by_name(self, name: str) -> pd.DataFrame:
         """
         Retrieves item in inventory based on item ID.
 
@@ -71,6 +72,7 @@ class InventoryManagingService(object):
         """
         sql = sa.select(Inventory).where(Inventory.item_name == name)
         return DatabaseProvider.pandas_read_sql(self._engine, sql)
+
 
     def item_enough_stock(self, item_id: int | str, quantity: int | str) -> bool:
         """
