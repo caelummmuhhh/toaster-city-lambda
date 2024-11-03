@@ -1,9 +1,10 @@
 import sqlalchemy as sa
 import pandas as pd
-from database_provider import DatabaseProvider
-from toasterdb_orms import *
 
-class InventoryManager(object):
+from utils.database_provider import DatabaseProvider
+from models.toasterdb_orms import *
+
+class InventoryManagingService(object):
     """Handles Inventory management related requests."""
     _db: sa.engine.Engine
 

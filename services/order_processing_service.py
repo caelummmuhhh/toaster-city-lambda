@@ -4,8 +4,8 @@ import pandas as pd
 import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
-from database_provider import DatabaseProvider
-from toasterdb_orms import *
+from utils.database_provider import DatabaseProvider
+from models.toasterdb_orms import *
 
 class OrderStatus(Enum):
     RECEIVED = 'Received'
@@ -15,7 +15,7 @@ class OrderStatus(Enum):
     CANCELLED = 'Cancelled'
 
 
-class OrderProcessor(object):
+class OrderProcessingService(object):
     """Handles order processing for a singular order."""
     _engine: sa.engine.Engine
 
@@ -39,7 +39,7 @@ class OrderProcessor(object):
         """
         self._engine = engine
 
-    def process_order(self, order: dict) -> tuple[int, str]:
+    def process_order(self, order: dict) -> tuple[int, str | int]:
         """
         Processes an order with the ordered items, payment info, and shipping info.
         Updates the database as neccessary.
@@ -83,7 +83,7 @@ class OrderProcessor(object):
         Returns
         -------
         tuple[int, str]
-            A an HTTP response status code and a message.
+            A an HTTP response status code and a message. If no error, message is confirmation number.
         """
         self._raw_order = order
 
@@ -115,6 +115,7 @@ class OrderProcessor(object):
             self.__update_database_with_order__()
         except Exception as err:
             return 500, f'An error occurred when processing order. {type(err).__name__}'
+        return 200, self._order_id
     
     def __validate_raw_order__(self) -> bool:
         """
@@ -325,37 +326,3 @@ class OrderProcessor(object):
             else:
                 session.commit()
         return success
-
-
-        
-    
-
-order_example = {
-    'items': [
-        {
-            'item_id': 123,
-            'quantity': 123
-        }
-    ],
-    'payment_info': {
-        'name': 'Jane Doe',
-        'card_number': '123',
-        'expiration_date': '10/20',
-        'cvv': 123,
-        'billing_address': {
-            'address_1': '123 Main St',
-            'address_2': '321 2nd Ave',
-            'city': 'Columbus',
-            'state': 'OH',
-            'zip': 43210
-        }
-    },
-    'shipping_info': {
-        'name': 'Jane Doe',
-        'address_1': '123 Main St',
-        'address_2': '321 2nd Ave',
-        'city': 'Columbus',
-        'state': 'OH',
-        'zip': 43210
-    }
-}

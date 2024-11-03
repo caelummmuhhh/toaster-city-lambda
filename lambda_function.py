@@ -1,9 +1,9 @@
 import json
-from inventory_management import InventoryManager
-from database_provider import DatabaseProvider
+from services.inventory_service import InventoryManagingService
+from utils.database_provider import DatabaseProvider
 
 db = DatabaseProvider()
-inv = InventoryManager(db.get_engine())
+inv = InventoryManagingService(db.get_engine())
 
 
 inv.get_inventory()
