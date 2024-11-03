@@ -1,10 +1,9 @@
 import sqlalchemy as sa
 import pandas as pd
 
-from _base_handler import _BaseHandler
 from services.inventory_service import InventoryManagingService
 
-class InventoryManagementHandler(_BaseHandler):
+class InventoryManagementHandler():
     """Handles events (HTTP requests) for the inventory-management resource."""
     _engine: sa.engine.Engine
     _manager: InventoryManagingService

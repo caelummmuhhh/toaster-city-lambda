@@ -1,9 +1,8 @@
 import sqlalchemy as sa
 
-from _base_handler import _BaseHandler
 from services.order_processing_service import OrderProcessingService
 
-class OrderProcessingHandler(_BaseHandler):
+class OrderProcessingHandler():
     """Handles events (HTTP requests) for the order-processing resource."""
     _engine: sa.engine.Engine
     _processor: OrderProcessingService

@@ -1,6 +1,6 @@
 from json import dumps
+from os import environ
 
-from handlers._base_handler import _BaseHandler
 from handlers.inventory_management_handler import InventoryManagementHandler
 from handlers.order_processing_handler import OrderProcessingHandler
 
@@ -27,10 +27,13 @@ class Router(object):
         dict
             A dictionary with the HTTP status code and a body.
         """
+        env_var_name = 'toast_db_conn_str'
+        conn_str = environ.get(env_var_name)
+
         resource: str = event['resource']
         parent_resource = resource.split('/')[1]
         if parent_resource and parent_resource in Router._routes:
-            handler: _BaseHandler = Router._routes[parent_resource]() # TODO: grab connection str from env var
+            handler = Router._routes[parent_resource](conn_str)
 
             status, body = handler.handle_request(event, context)
         else:
