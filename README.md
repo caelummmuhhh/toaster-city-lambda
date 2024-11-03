@@ -15,6 +15,8 @@ This is the source code for the *toaster-city-inventory* AWS Lambda Function.
 
 - **`src/services/`**: Encapsulates the business logic for the application, promoting separation of concerns and making testing and maintenance easier.
 
+- **`src/models/`**: Contains the SQLAlchemy ORMs for the database.
+
 - **`src/utils/`**: Contains utility functions and helper methods that can be reused across different modules.
 
 - **`src/test.ipynb`**: A Jupyter Notebook used as a playground for the devs. This notebook is there for devs to test out code snippets, explore new ideas, and validate functionality. The code in the playground notebook is **not important** to the project and should not be relied upon for production use. Developers are allowed to **overwrite or delete** any code in this notebook as needed. It is a temporary space for testing and should not contain any important or critical code. Please ensure that important code is saved in the appropriate source files within the project structure. So any code that you value should not be in there after a commit.
