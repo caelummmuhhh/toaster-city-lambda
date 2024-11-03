@@ -19,6 +19,7 @@ var/
 *.egg-info/
 .installed.cfg
 *.egg
+.DS_Store
 
 # Installer logs
 pip-log.txt
@@ -48,3 +49,8 @@ coverage.xml
 
 # Sphinx documentation
 docs/_build/
+
+# Python Virtual Environment
+package.zip
+
+venv/

@@ -81,8 +81,8 @@ class InventoryManagementHandler():
         """
         # Handle multiple names
         # If both query_str_params and multi_query_str_params are provided, multi takes priority
-        if isinstance(multi_query_str_params, dict) and 'name' in multi_query_str_params:
-            item_names: list = multi_query_str_params['name']
+        if isinstance(multi_query_str_params, dict) and 'item_name' in multi_query_str_params:
+            item_names: list = multi_query_str_params['item_name']
             items_found = pd.DataFrame()
             for item_name in item_names:
                 item_df = self._manager.get_item_by_name(item_name)
@@ -95,8 +95,8 @@ class InventoryManagementHandler():
             return 200, items_found.to_dict('records')
 
         # Handle single name item
-        if isinstance(query_str_params, dict) and 'name' in query_str_params:
-            item_name = query_str_params['name']
+        if isinstance(query_str_params, dict) and 'item_name' in query_str_params:
+            item_name = query_str_params['item_name']
             item_df = self._manager.get_item_by_name(item_name)
 
             if item_df.empty:
@@ -122,7 +122,7 @@ class InventoryManagementHandler():
             An HTTP status code and a message.
             If id is in `path_param` and is valid, the message is a dictionary of the item found.
         """
-        if isinstance(path_params, dict) or 'id' not in path_params:
+        if not isinstance(path_params, dict) or 'id' not in path_params:
             return 400, 'Missing path parameter, item ID.'
         
         if not path_params['id'].isdigit():

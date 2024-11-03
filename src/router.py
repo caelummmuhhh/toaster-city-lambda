@@ -3,6 +3,7 @@ from os import environ
 
 from handlers.inventory_management_handler import InventoryManagementHandler
 from handlers.order_processing_handler import OrderProcessingHandler
+from utils.database_provider import DatabaseProvider
 
 class Router(object):
     _routes = {
@@ -33,7 +34,7 @@ class Router(object):
         resource: str = event['resource']
         parent_resource = resource.split('/')[1]
         if parent_resource and parent_resource in Router._routes:
-            handler = Router._routes[parent_resource](conn_str)
+            handler = Router._routes[parent_resource](DatabaseProvider(conn_str).get_engine())
 
             status, body = handler.handle_request(event, context)
         else:

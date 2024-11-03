@@ -1,3 +1,5 @@
+import json
+
 import sqlalchemy as sa
 
 from services.order_processing_service import OrderProcessingService
@@ -24,7 +26,7 @@ class OrderProcessingHandler():
         path = event['resource']
 
         if path == '/order-processing/order':
-            status_code, body = self.post_order()
+            status_code, body = self.post_order(event['body'])
         else:
             status_code = 400
             body = 'Unknown path for order-processing resource.'
@@ -49,7 +51,15 @@ class OrderProcessingHandler():
         if not self.__validate_order__(order):
             return 400, 'Order not properly formatted.'
 
-        return self._processor.process_order(order)
+        order = json.loads(order)
+        status_code, msg =  self._processor.process_order(order)
+
+        if isinstance(msg, int):
+            msg = {
+                'confirmation_number': msg
+            }
+        
+        return 200, msg
 
 
     def __validate_order__(self, order) -> bool:
@@ -66,6 +76,7 @@ class OrderProcessingHandler():
         bool
             True if the order has all required information, False otherwise.
         """
+        order = json.loads(order)
         if not isinstance(order, dict):
             return False
 
