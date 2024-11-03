@@ -34,7 +34,7 @@ Please note that the Jupyter Notebook has its own set of environment variables o
 
 ## Deployment
 
-The project is automatically deployed to AWS Lambda whenever changes are made to the `main` branch of the repository.
+The project is automatically deployed to AWS Lambda whenever changes are made to the `main` branch of the repository. Only the `/src` folder is uploaded to the AWS Lambda Function.
 
 The current package requirements for the project are configured as AWS Layers that are attached to the Lambda function on AWS. If any new packages are needed, they should be added to the appropriate layer configuration.
 
