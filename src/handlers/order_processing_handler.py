@@ -78,41 +78,50 @@ class OrderProcessingHandler():
         """
         order = json.loads(order)
         if not isinstance(order, dict):
+            print('order not dict')
             return False
 
         # Check for top level keys
         required_top_level_keys = {'items', 'payment_info', 'shipping_info'}
         if not required_top_level_keys.issubset(order.keys()):
+            print('top level keys incorrect')
             return False
 
         # Check items
         if not isinstance(order['items'], list) or not order['items']:
+            print('items not list or empty')
             return False
         
         for item in order['items']:
             if not isinstance(item, dict):
+                print('item not dict')
                 return False
             if not {'item_id', 'quantity'}.issubset(item.keys()):
+                print('item incorrect keys')
                 return False
             if not isinstance(item['item_id'], int) or not isinstance(item['quantity'], int):
+                print('item keys incorrect types')
                 return False
 
         # Check payment_info
         payment_info = order['payment_info']
         required_payment_keys = {'name', 'card_number', 'expiration_date', 'cvv', 'billing_address'}
         if not required_payment_keys.issubset(payment_info.keys()):
+            print('payment_info incorrect keys')
             return False
         
         # Check billing_address within payment_info
         billing_address = payment_info['billing_address']
         required_billing_keys = {'address_1', 'address_2', 'city', 'state', 'zip'}
         if not required_billing_keys.issubset(billing_address.keys()):
+            print('billing_address incorrect keys')
             return False
 
         # Check shipping_info
         shipping_info = order['shipping_info']
         required_shipping_keys = {'name', 'address_1', 'address_2', 'city', 'state', 'zip'}
         if not required_shipping_keys.issubset(shipping_info.keys()):
+            print('shipping_info incorrect keys')
             return False
 
         return True
