@@ -94,7 +94,7 @@ class OrderProcessingService(object):
             return 409, 'Not enough items in stock.' # Conflict
         
         try:
-            self.payment_confirmation_token = self.__process_payment__()
+            confirmation_token = self.__call_payment_service__(order['payment_info'])
             self.__process_shipping__()
 
             self._order_id = DatabaseProvider.query_db(
@@ -106,11 +106,12 @@ class OrderProcessingService(object):
                 CustomerOrder.id.name: [self._order_id],
                 CustomerOrder.customer_name.name: [order['payment_info']['name']],
                 CustomerOrder.shipping_info_id.name: [self._shipping_info_id],
-                CustomerOrder.payment_info_id.name: [self._payment_info_id],
+                CustomerOrder.payment_confirmation_token.name: [confirmation_token],
                 CustomerOrder.status.name: [OrderStatus.RECEIVED.value]
             })
 
             self.__process_order_items__()
+
         except Exception as err:
             return 500, f'An error occurred when processing order. {type(err).__name__}'
         
@@ -139,23 +140,16 @@ class OrderProcessingService(object):
             items_data[CustomerOrderLineItem.quantity.name].append(item['quantity'])
 
         self._order_items_df = pd.DataFrame(items_data)
-
-    def __process_payment__(self):
-        """
-        Payment should be processed by the Payment Lambda
-        """
-        # TODO: This query is really inefficient and will be really slow once the table gets large
-        #       Implement a logging in system or something where we'll properly save to a user's account.
-        #       Matter fact, payment info probably shouldn't be stored without user permission anyways...
-        payment_info = {
-            "name": self._raw_order['payment_info']['name'],
-            "billing_address": self._raw_order['payment_info']['billing_address']
-        }
+    
+    def __call_payment_service__(self, payment_info: dict) -> str:
+        """Posts payment info to Payment Lambda and receives a confirmation token."""
+        url = "https://1zpl4u5btg.execute-api.us-east-2.amazonaws.com/Test/payment"
+        response = requests.post(url, json = payment_info)
         
-        response = requests.post("https://1zpl4u5btg.execute-api.us-east-2.amazonaws.com/Test/payment", json = payment_info)
-
         if response.status_code != 200:
-            raise Exception("Payment processing failed")
+            raise Exception("Payment processing failed.")
+        
+        return response.json().get('confirmation_token')
 
 
     def __process_shipping__(self) -> int:
