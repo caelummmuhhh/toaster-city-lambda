@@ -2,6 +2,7 @@ from enum import Enum
 
 import pandas as pd
 import sqlalchemy as sa
+import requests
 from sqlalchemy.orm import Session
 
 from utils.database_provider import DatabaseProvider
@@ -231,15 +232,25 @@ class OrderProcessingService(object):
             True if quantity all items in order are <= the corresponding item stock, False otherwise.
         """
         for item in self._raw_order['items']:
-            query = sa.select(Inventory).where(
-                (Inventory.item_id == item['item_id'])
-                & (Inventory.stock_quantity >= item['quantity'])
+            #query = sa.select(Inventory).where(
+            #    (Inventory.item_id == item['item_id'])
+            #    & (Inventory.stock_quantity >= item['quantity'])
+            #)
+            #res = DatabaseProvider.query_db(self._engine, query)
+            res = requests.get(
+                f'https://1zpl4u5btg.execute-api.us-east-2.amazonaws.com/Test/inventory-management/inventory/items/{item['item_id']}'
             )
-            res = DatabaseProvider.query_db(self._engine, query)
 
-            if not res:
-                # Empty list was returned, so item does not have enough stock
+            if res.status_code != 200:
                 return False
+            
+            data = res.json()
+            if data[0]['stock_quantity'] < item['quantity']:
+                return False
+            
+            #if not res:
+            #    # Empty list was returned, so item does not have enough stock
+            #    return False
         return True
     
     
