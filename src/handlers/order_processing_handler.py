@@ -56,7 +56,8 @@ class OrderProcessingHandler():
 
         if isinstance(msg, int):
             msg = {
-                'confirmation_number': msg
+                'confirmation_number': msg,
+                'confirmation_token': self._processor._payment_confirmation_token
             }
         
         return 200, msg
@@ -82,7 +83,7 @@ class OrderProcessingHandler():
             return False
 
         # Check for top level keys
-        required_top_level_keys = {'items', 'payment_info', 'shipping_info'}
+        required_top_level_keys = {'items', 'shipping_info'}
         if not required_top_level_keys.issubset(order.keys()):
             print('top level keys incorrect')
             return False

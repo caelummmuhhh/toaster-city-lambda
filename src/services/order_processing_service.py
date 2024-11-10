@@ -1,5 +1,6 @@
 from enum import Enum
 
+import requests
 import pandas as pd
 import sqlalchemy as sa
 from sqlalchemy.orm import Session
@@ -93,7 +94,7 @@ class OrderProcessingService(object):
             return 409, 'Not enough items in stock.' # Conflict
         
         try:
-            self.__process_payment__()
+            self.payment_confirmation_token = self.__process_payment__()
             self.__process_shipping__()
 
             self._order_id = DatabaseProvider.query_db(
@@ -141,52 +142,20 @@ class OrderProcessingService(object):
 
     def __process_payment__(self):
         """
-        Process payment information from order. If payment info does not already exist in database,
-        sets `self._payment_df` with `pandas.DataFrame` of the payment info. Also sets `self._payment_info_id`
-        with the existing payment info in database or new one that's going to be inserted.
+        Payment should be processed by the Payment Lambda
         """
         # TODO: This query is really inefficient and will be really slow once the table gets large
         #       Implement a logging in system or something where we'll properly save to a user's account.
         #       Matter fact, payment info probably shouldn't be stored without user permission anyways...
-        payment = self._raw_order['payment_info']
-        params = {
-            PaymentInfo.name.name: payment['name'],
-            PaymentInfo.card_number.name: payment['card_number'],
-            PaymentInfo.expiration_date.name: payment['expiration_date'],
-            PaymentInfo.cvv.name: payment['cvv'],
-            PaymentInfo.address_1.name: payment['billing_address']['address_1'],
-            PaymentInfo.address_2.name: payment['billing_address']['address_2'],
-            PaymentInfo.city.name: payment['billing_address']['city'],
-            PaymentInfo.state.name: payment['billing_address']['state'],
-            PaymentInfo.zip.name: payment['billing_address']['zip'],
+        payment_info = {
+            "name": self._raw_order['payment_info']['name'],
+            "billing_address": self._raw_order['payment_info']['billing_address']
         }
-
-        sql = sa.select(PaymentInfo.id).where(
-            (sa.func.upper(PaymentInfo.name) == sa.func.upper(params[PaymentInfo.name.name]))
-            & (sa.func.upper(PaymentInfo.card_number) == sa.func.upper(params[PaymentInfo.card_number.name]))
-            & (sa.func.upper(PaymentInfo.expiration_date) == sa.func.upper(params[PaymentInfo.expiration_date.name]))
-            & (sa.func.upper(PaymentInfo.cvv) == sa.func.upper(params[PaymentInfo.cvv.name]))
-            & (sa.func.upper(PaymentInfo.address_1) == sa.func.upper(params[PaymentInfo.address_1.name]))
-            & (sa.func.upper(PaymentInfo.address_2) == sa.func.upper(params[PaymentInfo.address_2.name]))
-            & (sa.func.upper(PaymentInfo.city) == sa.func.upper(params[PaymentInfo.city.name]))
-            & (sa.func.upper(PaymentInfo.state) == sa.func.upper(params[PaymentInfo.state.name]))
-            & (sa.func.upper(PaymentInfo.zip) == sa.func.upper(params[PaymentInfo.zip.name]))
-        )
-
-        # Check if payment info already exists
-        id = DatabaseProvider.query_db(self._engine, sql)
-        if id:
-            self._payment_info_id = id[0][0] # query_db returns a list of tuples
-            return
         
-        # Payment doesn't exist, insert new row
-        # Retrieve/calculate new ID for row, since to_sql doesn't return new ID from auto_increment
-        id = DatabaseProvider.query_db(self._engine, sa.select(sa.func.ifnull(sa.func.max(PaymentInfo.id), 0) + 1))[0][0]
-        
-        self._payment_df = pd.DataFrame([], columns=[PaymentInfo.id.name] + list(params.keys()))
-        self._payment_df.loc[0] = [id] + [str(c) for c in params.values()]
+        response = requests.post("https://1zpl4u5btg.execute-api.us-east-2.amazonaws.com/Test/payment", json = payment_info)
 
-        self._payment_info_id = id
+        if response.status_code != 200:
+            raise Exception("Payment processing failed")
 
 
     def __process_shipping__(self) -> int:
