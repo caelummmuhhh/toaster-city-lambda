@@ -1,9 +1,11 @@
 from enum import Enum
 
+import boto3
 import pandas as pd
 import sqlalchemy as sa
 import requests
 from sqlalchemy.orm import Session
+import json
 
 from utils.database_provider import DatabaseProvider
 from models.toasterdb_orms import *
@@ -21,15 +23,13 @@ class OrderProcessingService(object):
     _engine: sa.engine.Engine
 
     _raw_order: dict
+    _business_info :dict
 
     _order_df: pd.DataFrame = None
     _order_items_df: pd.DataFrame = None
-    _payment_df: pd.DataFrame = None
-    _shipping_df: pd.DataFrame = None
 
     _order_id: int = None
-    _shipping_info_id: int = None
-    _payment_info_id: int = None
+    _payment_confirmation: str = None
 
     def __init__(self, engine: sa.engine.Engine):
         """
@@ -39,6 +39,7 @@ class OrderProcessingService(object):
             The engine to connect to the database to handle the order.
         """
         self._engine = engine
+        self.__get_business_shipping_info__()
 
 
     def process_order(self, order: dict) -> tuple[int, str | int]:
@@ -95,7 +96,10 @@ class OrderProcessingService(object):
         
         try:
             self.__process_payment__()
-            self.__process_shipping__()
+            if not self._payment_confirmation:
+                return 400, 'Could not process payment method, please try again.'
+            # TODO: bring back
+            #self.__process_shipping__()
 
             self._order_id = DatabaseProvider.query_db(
                 self._engine,
@@ -105,9 +109,8 @@ class OrderProcessingService(object):
             self._order_df = pd.DataFrame({
                 CustomerOrder.id.name: [self._order_id],
                 CustomerOrder.customer_name.name: [order['payment_info']['name']],
-                CustomerOrder.shipping_info_id.name: [self._shipping_info_id],
-                CustomerOrder.payment_info_id.name: [self._payment_info_id],
-                CustomerOrder.status.name: [OrderStatus.RECEIVED.value]
+                CustomerOrder.status.name: [OrderStatus.RECEIVED.value],
+                CustomerOrder.payment_confirmation_id.name: self._payment_confirmation
             })
 
             self.__process_order_items__()
@@ -146,82 +149,86 @@ class OrderProcessingService(object):
         sets `self._payment_df` with `pandas.DataFrame` of the payment info. Also sets `self._payment_info_id`
         with the existing payment info in database or new one that's going to be inserted.
         """
-        # TODO: This query is really inefficient and will be really slow once the table gets large
-        #       Implement a logging in system or something where we'll properly save to a user's account.
-        #       Matter fact, payment info probably shouldn't be stored without user permission anyways...
-        payment = self._raw_order['payment_info']
-        params = {
-            PaymentInfo.name.name: payment['name'],
-            PaymentInfo.card_number.name: payment['card_number'],
-            PaymentInfo.expiration_date.name: payment['expiration_date'],
-            PaymentInfo.cvv.name: payment['cvv'],
-            PaymentInfo.address_1.name: payment['billing_address']['address_1'],
-            PaymentInfo.address_2.name: payment['billing_address']['address_2'],
-            PaymentInfo.city.name: payment['billing_address']['city'],
-            PaymentInfo.state.name: payment['billing_address']['state'],
-            PaymentInfo.zip.name: payment['billing_address']['zip'],
+        URL = 'https://1zpl4u5btg.execute-api.us-east-2.amazonaws.com/Test/payment'
+        items = self._raw_order['items']
+        total_cost = 0
+        
+        for item in items:
+            sql = sa.select(Inventory).where(Inventory.item_id == item['item_id'])
+
+            inv_item: pd.DataFrame = DatabaseProvider.pandas_read_sql(self._engine, sql)
+            unit_price = inv_item.loc[0, Inventory.unit_price.name]
+            total_cost += item['quantity'] * unit_price
+
+        body = {
+            'payment_info': self._raw_order['payment_info'],
+            'transaction': {
+                'amount': total_cost,
+                'type': 'purchase'
+            }
         }
 
-        sql = sa.select(PaymentInfo.id).where(
-            (sa.func.upper(PaymentInfo.name) == sa.func.upper(params[PaymentInfo.name.name]))
-            & (sa.func.upper(PaymentInfo.card_number) == sa.func.upper(params[PaymentInfo.card_number.name]))
-            & (sa.func.upper(PaymentInfo.expiration_date) == sa.func.upper(params[PaymentInfo.expiration_date.name]))
-            & (sa.func.upper(PaymentInfo.cvv) == sa.func.upper(params[PaymentInfo.cvv.name]))
-            & (sa.func.upper(PaymentInfo.address_1) == sa.func.upper(params[PaymentInfo.address_1.name]))
-            & (sa.func.upper(PaymentInfo.address_2) == sa.func.upper(params[PaymentInfo.address_2.name]))
-            & (sa.func.upper(PaymentInfo.city) == sa.func.upper(params[PaymentInfo.city.name]))
-            & (sa.func.upper(PaymentInfo.state) == sa.func.upper(params[PaymentInfo.state.name]))
-            & (sa.func.upper(PaymentInfo.zip) == sa.func.upper(params[PaymentInfo.zip.name]))
-        )
-
-        # Check if payment info already exists
-        id = DatabaseProvider.query_db(self._engine, sql)
-        if id:
-            self._payment_info_id = id[0][0] # query_db returns a list of tuples
+        r = requests.post(URL, json=body)
+        
+        if r.status_code != 200:
             return
         
-        # Payment doesn't exist, insert new row
-        # Retrieve/calculate new ID for row, since to_sql doesn't return new ID from auto_increment
-        id = DatabaseProvider.query_db(self._engine, sa.select(sa.func.ifnull(sa.func.max(PaymentInfo.id), 0) + 1))[0][0]
+        self._payment_confirmation = r.json()['confirmation_number']
         
-        self._payment_df = pd.DataFrame([], columns=[PaymentInfo.id.name] + list(params.keys()))
-        self._payment_df.loc[0] = [id] + [str(c) for c in params.values()]
 
-        self._payment_info_id = id
+    def __get_business_shipping_info__(self) -> None:
+        """Retrieves business information (name, address, business id, etc.)"""
+        self._business_info = DatabaseProvider.pandas_read_sql(self._engine, sa.select(BusinessInfo)).to_dict('records')[0]
 
 
     def __process_shipping__(self) -> int:
         """
-        Process shipping information from order. If shipping info does not already exist in database,
-        sets `self._shipping_df` with `pandas.DataFrame` of the shipping info. Also sets `self._shipping_info_id`
-        with the existing shipping info in database or new one that's going to be inserted.
+        Async process shipment by putting an event on an event bus.
+        Sending shipping info (addresses, packets, etc.) to shiping "vendor".
         """
-        shipment = self._raw_order['shipping_info']        
-        sql = sa.select(ShippingInfo.id).where(
-            (sa.func.upper(ShippingInfo.name) == sa.func.upper(shipment['name']))
-            & (sa.func.upper(ShippingInfo.address_1) == sa.func.upper(shipment['address_1']))
-            & (sa.func.upper(ShippingInfo.address_2) == sa.func.upper(shipment['address_2']))
-            & (sa.func.upper(ShippingInfo.city) == sa.func.upper(shipment['city']))
-            & (sa.func.upper(ShippingInfo.state) == sa.func.upper(shipment['state']))
-            & (sa.func.upper(ShippingInfo.zip) == sa.func.upper(shipment['zip']))
-        )
-        
-        id = DatabaseProvider.query_db(self._engine, sql)
-        if id:
-            self._shipping_info_id = id[0][0] # query_db returns a list of tuples
-            return
-        
-        # Payment doesn't exist, insert new row
-        # Retrieve/calculate new ID for row, since to_sql doesn't return new ID from auto_increment
-        id = DatabaseProvider.query_db(self._engine, sa.select(sa.func.ifnull(sa.func.max(ShippingInfo.id), 0) + 1))[0][0]
+        # TODO
+        shipment_info = {
+            'business_id': self._business_info[BusinessInfo.shipment_business_id.name],
+            'sender': {
+                'name': self._business_info[BusinessInfo.business_name.name],
+                'address': self._business_info[BusinessInfo.address.name],
+                'city': self._business_info[BusinessInfo.city.name],
+                'state': self._business_info[BusinessInfo.state.name],
+                'zip': self._business_info[BusinessInfo.zip.name]
+            },
+            'recipient': self._raw_order['shipping_info'],
+            'packets': []
+        }
+        for packet in self._order_items_df:
+            # TODO
+            continue
 
-        # column names are the same as keys in shipment, but uppercase
-        self._shipping_df = pd.DataFrame([], columns=[ShippingInfo.id.name] + list(shipment.keys()))
-        self._shipping_df.loc[0] = [id] + [str(c) for c in shipment.values()]
-
-        self._shipping_info_id = id
-
+        shipment_info = {
+            'business_id': '',
+            'sender': {
+                'name': '',
+                'address': '',
+                'city': '',
+                'state': '',
+                'zip': ''
+            },
+            'recipient': {
+                'name': '',
+                'address_1': '',
+                'address_2': '',
+                'city': '',
+                'state': '',
+                'zip': ''
+            },
+            'packets': [
+                {
+                    'packet_name': '',
+                    'weight': ''
+                }
+            ]
+        }
     
+
     def __in_stock__(self) -> bool:
         """
         Checks if the items have enough stock quantity based on the order quantity.
@@ -232,11 +239,6 @@ class OrderProcessingService(object):
             True if quantity all items in order are <= the corresponding item stock, False otherwise.
         """
         for item in self._raw_order['items']:
-            #query = sa.select(Inventory).where(
-            #    (Inventory.item_id == item['item_id'])
-            #    & (Inventory.stock_quantity >= item['quantity'])
-            #)
-            #res = DatabaseProvider.query_db(self._engine, query)
             res = requests.get(
                 f'https://1zpl4u5btg.execute-api.us-east-2.amazonaws.com/Test/inventory-management/inventory/items/{item['item_id']}'
             )
@@ -247,10 +249,6 @@ class OrderProcessingService(object):
             data = res.json()
             if data[0]['stock_quantity'] < item['quantity']:
                 return False
-            
-            #if not res:
-            #    # Empty list was returned, so item does not have enough stock
-            #    return False
         return True
     
     
@@ -271,12 +269,7 @@ class OrderProcessingService(object):
         with Session(self._engine) as session:
             session.begin()
             try:
-                # Shipping and payment may already exist
-                if (self._payment_df is not None and not self._payment_df.empty):
-                    session.execute(sa.insert(PaymentInfo).values(self._payment_df.to_dict('records')))
-                if (self._shipping_df is not None and not self._shipping_df.empty):
-                    session.execute(sa.insert(ShippingInfo).values(self._shipping_df.to_dict('records')))
-
+                # TODO: get payment confirmation number 
                 session.execute(sa.insert(CustomerOrder).values(self._order_df.to_dict('records')))
                 session.execute(sa.insert(CustomerOrderLineItem).values(self._order_items_df.to_dict('records')))
 
@@ -291,4 +284,5 @@ class OrderProcessingService(object):
                 success = False
             else:
                 session.commit()
+        # TODO: Async send shipping info
         return success

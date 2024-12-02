@@ -59,7 +59,7 @@ class OrderProcessingHandler():
                 'confirmation_number': msg
             }
         
-        return 200, msg
+        return status_code, msg
 
 
     def __validate_order__(self, order) -> bool:
