@@ -23,6 +23,7 @@ class OrderProcessingService(object):
     _engine: sa.engine.Engine
 
     _raw_order: dict
+    _business_info :dict
 
     _order_df: pd.DataFrame = None
     _order_items_df: pd.DataFrame = None
@@ -38,6 +39,7 @@ class OrderProcessingService(object):
             The engine to connect to the database to handle the order.
         """
         self._engine = engine
+        self.__get_business_shipping_info__()
 
 
     def process_order(self, order: dict) -> tuple[int, str | int]:
@@ -94,7 +96,10 @@ class OrderProcessingService(object):
         
         try:
             self.__process_payment__()
-            self.__process_shipping__()
+            if not self._payment_confirmation:
+                return 400, 'Could not process payment method, please try again.'
+            # TODO: bring back
+            #self.__process_shipping__()
 
             self._order_id = DatabaseProvider.query_db(
                 self._engine,
@@ -104,9 +109,8 @@ class OrderProcessingService(object):
             self._order_df = pd.DataFrame({
                 CustomerOrder.id.name: [self._order_id],
                 CustomerOrder.customer_name.name: [order['payment_info']['name']],
-                CustomerOrder.shipping_info_id.name: [self._shipping_info_id],
-                CustomerOrder.payment_info_id.name: [self._payment_info_id],
-                CustomerOrder.status.name: [OrderStatus.RECEIVED.value]
+                CustomerOrder.status.name: [OrderStatus.RECEIVED.value],
+                CustomerOrder.payment_confirmation_id.name: self._payment_confirmation
             })
 
             self.__process_order_items__()
@@ -145,12 +149,36 @@ class OrderProcessingService(object):
         sets `self._payment_df` with `pandas.DataFrame` of the payment info. Also sets `self._payment_info_id`
         with the existing payment info in database or new one that's going to be inserted.
         """
-        # TODO: call payments API to POST payment info, get confirmation #
-        pass
+        URL = 'https://1zpl4u5btg.execute-api.us-east-2.amazonaws.com/Test/payment'
+        items = self._raw_order['items']
+        total_cost = 0
+        
+        for item in items:
+            sql = sa.select(Inventory).where(Inventory.item_id == item['item_id'])
+
+            inv_item: pd.DataFrame = DatabaseProvider.pandas_read_sql(self._engine, sql)
+            unit_price = inv_item.loc[0, Inventory.unit_price.name]
+            total_cost += item['quantity'] * unit_price
+
+        body = {
+            'payment_info': self._raw_order['payment_info'],
+            'transaction': {
+                'amount': total_cost,
+                'type': 'purchase'
+            }
+        }
+
+        r = requests.post(URL, json=body)
+        
+        if r.status_code != 200:
+            return
+        
+        self._payment_confirmation = r.json()['confirmation_number']
+        
 
     def __get_business_shipping_info__(self) -> None:
         """Retrieves business information (name, address, business id, etc.)"""
-        pass
+        self._business_info = DatabaseProvider.pandas_read_sql(self._engine, sa.select(BusinessInfo)).to_dict('records')[0]
 
 
     def __process_shipping__(self) -> int:
@@ -158,7 +186,47 @@ class OrderProcessingService(object):
         Async process shipment by putting an event on an event bus.
         Sending shipping info (addresses, packets, etc.) to shiping "vendor".
         """
-        pass
+        # TODO
+        shipment_info = {
+            'business_id': self._business_info[BusinessInfo.shipment_business_id.name],
+            'sender': {
+                'name': self._business_info[BusinessInfo.business_name.name],
+                'address': self._business_info[BusinessInfo.address.name],
+                'city': self._business_info[BusinessInfo.city.name],
+                'state': self._business_info[BusinessInfo.state.name],
+                'zip': self._business_info[BusinessInfo.zip.name]
+            },
+            'recipient': self._raw_order['shipping_info'],
+            'packets': []
+        }
+        for packet in self._order_items_df:
+            # TODO
+            continue
+
+        shipment_info = {
+            'business_id': '',
+            'sender': {
+                'name': '',
+                'address': '',
+                'city': '',
+                'state': '',
+                'zip': ''
+            },
+            'recipient': {
+                'name': '',
+                'address_1': '',
+                'address_2': '',
+                'city': '',
+                'state': '',
+                'zip': ''
+            },
+            'packets': [
+                {
+                    'packet_name': '',
+                    'weight': ''
+                }
+            ]
+        }
     
 
     def __in_stock__(self) -> bool:
